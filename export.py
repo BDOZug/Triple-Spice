@@ -1,8 +1,7 @@
 import pandas as pd
-from solders.pubkey import Pubkey as SoldersPubkey
 from solana.rpc.api import Client
 from solana.rpc.types import TokenAccountOpts
-from solders.pubkey import Pubkey as PublicKey
+from solders.pubkey import Pubkey
 
 # === KONFIGURATION ===
 CSV_DATEI = "Tripe Spice AG (V2)-transactions-7_24_2025.csv"
@@ -15,7 +14,7 @@ TOKEN_MINTS = {
     "DezXZX3wAqKdugYUtLwWjFVXocF6vRy7vGHvdZADvw5S": "BONK"
 }
 TOKENS = ['SOL', 'WSOL', 'USDC', 'USDT', 'BONK']
-SPL_TOKEN_PROGRAM_ID = PublicKey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+SPL_TOKEN_PROGRAM_ID = Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
 
 # === 1. Wallet-Liste laden ===
 wallet_df = pd.read_csv(WALLET_CSV)
@@ -42,51 +41,60 @@ client = Client(RPC_URL)
 
 # === 5. Vergleich durchführen ===
 results = []
-for wallet in wallets:
+for idx, wallet in enumerate(wallets, start=1):
+    print(f"\n[{idx}/{len(wallets)}] Prüfe Wallet: {wallet}")
     row = {"Wallet": wallet}
     try:
-        wallet_pubkey = PublicKey.from_string(wallet)
+        wallet_pubkey = Pubkey.from_string(wallet)
     except Exception as e:
-        print(f"Fehler bei Wallet Pubkey für {wallet}: {e}")
+        print(f"  ❌ Fehler bei Wallet Pubkey: {e}")
         continue
 
     # On-chain SOL
     try:
         sol_resp = client.get_balance(wallet_pubkey)
         sol_amount = sol_resp.value / 1e9
+        print(f"  ✅ SOL: {sol_amount:.6f}")
     except Exception as e:
-        print(f"Fehler bei SOL Balance für {wallet}: {e}")
+        print(f"  ❌ Fehler bei SOL Balance: {e}")
         sol_amount = 0.0
     row['SOL_Mainnet'] = sol_amount
 
     # On-chain SPL
     spl_amounts = {sym: 0.0 for sym in TOKENS if sym != 'SOL'}
     try:
-        opts = TokenAccountOpts(
-            program_id=SPL_TOKEN_PROGRAM_ID,
-            encoding="jsonParsed"
-        )
-        resp = client.get_token_accounts_by_owner(wallet_pubkey, opts=opts)
-        for acc in resp.value:
+        opts = TokenAccountOpts(program_id=SPL_TOKEN_PROGRAM_ID, encoding="jsonParsed")
+        resp = client.get_token_accounts_by_owner(wallet_pubkey, opts)
+        accounts = resp.value if hasattr(resp, 'value') else []
+        for acc in accounts:
             try:
-                info = acc.account.data.parsed['info'] if isinstance(acc.account.data.parsed, dict) else acc.account.data['parsed']['info']
-                mint = info['mint']
-                amount = float(info['tokenAmount']['uiAmount'])
+                if isinstance(acc, dict):
+                    info = acc.get('account', {}).get('data', {}).get('parsed', {}).get('info', {})
+                else:
+                    data = acc.account.data
+                    parsed = data.parsed if hasattr(data, 'parsed') else {}
+                    info = parsed.get('info', {}) if isinstance(parsed, dict) else getattr(parsed, 'info', {})
+
+                mint = info.get("mint")
+                token_amount = info.get("tokenAmount", {})
+                amount = float(token_amount.get("uiAmount", 0))
                 symbol = TOKEN_MINTS.get(mint)
                 if symbol:
                     spl_amounts[symbol] += amount
             except Exception as e:
-                print(f"Fehler beim Parsen von SPL Token für {wallet}: {e}")
+                print(f"  ⚠️ Fehler beim Parsen eines SPL-Accounts: {e}")
     except Exception as e:
-        print(f"Fehler bei SPL Token Balance für {wallet}: {e}")
+        print(f"  ❌ Fehler bei SPL Token-Abfrage: {e}")
 
     # Alle Token vergleichen
     for token in TOKENS:
         csv_value = grouped.loc[wallet, token] if wallet in grouped.index and token in grouped.columns else 0.0
         chain_value = sol_amount if token == 'SOL' else spl_amounts[token]
+        diff = chain_value - csv_value
         row[f"{token}_Mainnet"] = chain_value
         row[f"{token}_CSV"] = csv_value
-        row[f"{token}_Diff"] = chain_value - csv_value
+        row[f"{token}_Diff"] = diff
+        print(f"    {token}: Mainnet = {chain_value:.6f}, CSV = {csv_value:.6f}, Diff = {diff:.6f}")
 
     # Letzter Sync-Zeitpunkt
     last_sync_str = wallet_lastsync.get(wallet, '')
@@ -97,4 +105,4 @@ for wallet in wallets:
 # === 6. Exportieren ===
 df_result = pd.DataFrame(results)
 df_result.to_csv("wallet_balances_compare_allwallets.csv", index=False)
-print("Exportiert nach wallet_balances_compare_allwallets.csv")
+print("\n✅ Exportiert nach wallet_balances_compare_allwallets.csv")
