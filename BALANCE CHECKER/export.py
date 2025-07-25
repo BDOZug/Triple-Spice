@@ -4,8 +4,8 @@ from solana.rpc.types import TokenAccountOpts
 from solders.pubkey import Pubkey
 
 # === KONFIGURATION ===
-CSV_DATEI = "Tripe Spice AG (V2)-transactions-7_24_2025.csv"
-WALLET_CSV = "walletAddress.csv"
+CSV_DATEI = "BALANCE CHECKER/Tripe Spice AG transactions."
+WALLET_CSV = "BALANCE CHECKER/walletAddress.csv"
 RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKEN_MINTS = {
     "So11111111111111111111111111111111111111112": "WSOL",
