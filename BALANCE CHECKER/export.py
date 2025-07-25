@@ -4,6 +4,7 @@ import time
 
 # === KONFIGURATION ===
 RPC_URL = "https://mainnet.helius-rpc.com/?api-key=a6101a02-6a80-45a5-ba0d-bf462cc9e166"
+SOLSCAN_URL = "https://public-api.solscan.io/account/tokens"
 WALLET_CSV = "BALANCE CHECKER/walletAddress.csv"
 CSV_DATEI = "BALANCE CHECKER/Tripe Spice AG transactions.csv"
 EXPORT_DATEI = "BALANCE CHECKER/wallet_balances_compare_allwallets.csv"
@@ -15,7 +16,7 @@ TOKEN_MINTS = {
     "Es9vMFrzaCERz8Nu9Q8p8tEQQ3QSvWWtFkYwD8FSVhSJ": "USDT",
     "DezXhCz8rSQR3w9NCMGU4zoBZTq9tW7v6wJf3XZC4fXP": "BONK"
 }
-TOKENS = ['SOL', 'WSOL', 'USDC', 'USDT', 'BONK']
+TOKENS = ["SOL", "WSOL", "USDC", "USDT", "BONK"]
 
 
 def get_wallet_balances(wallet_address):
@@ -33,7 +34,8 @@ def get_wallet_balances(wallet_address):
         r = requests.post(RPC_URL, json=payload, headers=headers)
         sol = r.json().get("result", {}).get("value", 0) / 1e9
     except Exception as e:
-        print(f"  ⚠️ Fehler bei SOL für {wallet_address}: {e}")
+        print(f"  ⚠️ Fehler bei SOL für {wallet}: {e}")
+        return 0.0
 
     # === 2. SPL Tokens ===
     spl_tokens = {sym: 0.0 for sym in TOKENS if sym != "SOL"}
@@ -77,13 +79,11 @@ wallets = wallet_df[wallet_column].dropna().unique().tolist()
 
 # === TRANSAKTIONSDATEN ===
 df = pd.read_csv(CSV_DATEI)
-df = df[df['chain'].str.lower() == 'solana']
+df = df[df["chain"].str.lower() == "solana"]
 df['date'] = pd.to_datetime(df['date'], errors='coerce')
 df['lastSync'] = pd.to_datetime(df['lastSync'], errors='coerce')
-latest_sync = df['lastSync'].dropna().max()
-df_filtered = df[df['date'] <= latest_sync]
-grouped = df_filtered.groupby([wallet_column, 'token'])['amount'].sum().unstack().fillna(0)
-wallet_lastsync = df.groupby(wallet_column)['lastSync'].max().astype(str)
+latest_sync = df["lastSync"].dropna().max()
+df = df[df["date"] <= latest_sync]
 
 # === VERGLEICH ===
 results = []
@@ -92,6 +92,7 @@ all_symbols = set(grouped.columns.tolist())
 for idx, wallet in enumerate(wallets, start=1):
     print(f"[{idx}/{len(wallets)}] Prüfe Wallet: {wallet}")
     row = {"Wallet": wallet}
+    balances = get_wallet_balances(wallet)
 
     balances = get_wallet_balances(wallet)
     all_symbols.update(balances.keys())
