@@ -1,11 +1,15 @@
+import os
 import pandas as pd
 from solana.rpc.api import Client
 from solana.rpc.types import TokenAccountOpts
 from solders.pubkey import Pubkey
 
+# === BASIS-PFAD ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_DATEI = os.path.join(BASE_DIR, "Tripe Spice AG transactions.csv")
+WALLET_CSV = os.path.join(BASE_DIR, "walletAddress.csv")
+
 # === KONFIGURATION ===
-CSV_DATEI = "BALANCE CHECKER/Tripe Spice AG transactions."
-WALLET_CSV = "BALANCE CHECKER/walletAddress.csv"
 RPC_URL = "https://api.mainnet-beta.solana.com"
 TOKEN_MINTS = {
     "So11111111111111111111111111111111111111112": "WSOL",
@@ -103,6 +107,7 @@ for idx, wallet in enumerate(wallets, start=1):
     results.append(row)
 
 # === 6. Exportieren ===
+output_file = os.path.join(BASE_DIR, "wallet_balances_compare_allwallets.csv")
 df_result = pd.DataFrame(results)
-df_result.to_csv("wallet_balances_compare_allwallets.csv", index=False)
-print("\n✅ Exportiert nach wallet_balances_compare_allwallets.csv")
+df_result.to_csv(output_file, index=False)
+print(f"\n✅ Exportiert nach {output_file}")
